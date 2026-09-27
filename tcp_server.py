@@ -1,24 +1,33 @@
 import socket
 import threading
 import sys
+import shlex
 
+
+store = {}
 
 def handle_client(connection, client_address):
     print(f"[NEW CONNECTION] {client_address} connected.")
+
+    buffer = b""
     try:
         while True:
             data = connection.recv(1024)
-            if data:
-                message = data.decode('utf-8', errors='ignore')
-                
-
-                print(f"[{client_address}] Received: {message}")
-                
-                # Echo the message back to this specific client
-                connection.sendall(data)
-            else:
-                # No data means the client closed the connection gracefully
+            if not data:
                 break
+
+            buffer += data
+
+            while b"\n" in buffer:
+                line, buffer = buffer.split(b"\n", 1)
+
+                request = shlex.split(line.decode("utf-8"))
+                
+                response = command_parser(request)
+
+                connection.sendall(response.encode("utf-8"))
+
+
     except ConnectionResetError:
         print(f"[DISCONNECT] Client {client_address} abruptly disconnected.")
     except socket.error as e:
@@ -27,6 +36,52 @@ def handle_client(connection, client_address):
         connection.close()
         print(f"[CLOSE] Connection with {client_address} closed.")
 
+
+
+def command_parser(request):
+    if len(request) == 0:
+        return "ERROR Empty request."
+
+    if request[0] == 'PING':
+        return ping_handler()
+
+    match(request[0]):
+        case "GET":
+            if len(request) != 2:
+                return "ERROR GET need a key."
+            key = request[1]
+            return get_handler(key)
+        case "SET":
+            if len(request) != 3:
+                return "Invalid [SET] command."
+            key = request[1]
+            value = request[2]
+            return set_handler(key, value)
+        case "DEL":
+            if len(request) != 2:
+                return "ERROR DEL need a key."
+            key = request[1]
+            return del_handler(key)
+        case _:
+            return "Invalid request."
+
+def ping_handler():
+    return "PONG"
+
+def get_handler(key):
+    if key not in store:
+        return f"Key [{key}] does not exist."
+    return store[key]
+
+def set_handler(key, value):
+    store[key] = value
+    return "SET"
+
+def del_handler(key):
+    if key not in store:
+        return f"Key [{key}] does not exist."
+    del store[key]
+    return "DEL"
 
 def start_server():
     server_address = ('localhost', 8000)
