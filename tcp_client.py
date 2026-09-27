@@ -2,7 +2,7 @@ import socket
 import sys
 
 SERVER_IP = 'localhost'
-SERVER_PORT = 8080
+SERVER_PORT = 8000
 
 try:
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
