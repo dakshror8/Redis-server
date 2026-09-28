@@ -2,6 +2,7 @@ import socket
 import threading
 import sys
 import shlex
+import time
 
 
 store = {}
@@ -62,6 +63,11 @@ def command_parser(request):
                 return "ERROR DEL need a key."
             key = request[1]
             return del_handler(key)
+        case "INCR":
+            if len(request) != 2:
+                return "ERROR INCR need a key."
+            key = request[1]
+            return incr_handler(key)
         case _:
             return "Invalid request."
 
@@ -82,6 +88,25 @@ def del_handler(key):
         return f"Key [{key}] does not exist."
     del store[key]
     return "DEL"
+
+def incr_handler(key):
+    if key not in store:
+        return f"ERROR [{key}] does not exist."
+    '''
+    try:
+        tmp = int(store[key])
+    except ValueError:
+        print(f"ERROR [{key}] is not an integer.")
+        
+    
+    time.sleep(1)
+    tmp += 1
+    time.sleep(1)
+    
+    store[key] = str(tmp)
+    '''
+    store[key] = str(int(store[key]) + 1)
+    return "OK"
 
 def start_server():
     server_address = ('localhost', 8000)

@@ -24,7 +24,7 @@ try:
     client_socket.sendall(b" name\n")
     response = client_socket.recv(1024).decode("utf-8")
     print(response)
-    ''''
+    '''
 
     while True:
         msg = input()
