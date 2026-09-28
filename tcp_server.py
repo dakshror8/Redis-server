@@ -6,6 +6,7 @@ import time
 
 
 store = {}
+lock = threading.Lock()
 
 def handle_client(connection, client_address):
     print(f"[NEW CONNECTION] {client_address} connected.")
@@ -92,21 +93,23 @@ def del_handler(key):
 def incr_handler(key):
     if key not in store:
         return f"ERROR [{key}] does not exist."
-    '''
-    try:
-        tmp = int(store[key])
-    except ValueError:
-        print(f"ERROR [{key}] is not an integer.")
+    with lock:
+        '''
+        try:
+            tmp = int(store[key])
+        except ValueError:
+            print(f"ERROR [{key}] is not an integer.")
+            
         
-    
-    time.sleep(1)
-    tmp += 1
-    time.sleep(1)
-    
-    store[key] = str(tmp)
-    '''
-    store[key] = str(int(store[key]) + 1)
-    return "OK"
+        time.sleep(1)
+        tmp += 1
+        time.sleep(1)
+        
+        store[key] = str(tmp)
+        '''
+        store[key] = str(int(store[key]) + 1)
+        
+        return "OK"
 
 def start_server():
     server_address = ('localhost', 8000)
