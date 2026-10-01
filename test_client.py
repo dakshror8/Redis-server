@@ -9,12 +9,12 @@ def client(x):
     
     response = client_socket.recv(1024)
 
-    print(response.decode())
+    print(response.decode(), end="")
 
     client_socket.close()
 
 threads = []
-for i in range(9000):
+for i in range(100000):
     t = threading.Thread(target=client, args=('x',))
     threads.append(t)
     t.start()

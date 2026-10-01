@@ -1,76 +1,67 @@
-import socket
-import threading
+import asyncio
 import sys
 import shlex
 import time
 
 
 store = {}
-lock = threading.Lock()
 
-def handle_client(connection, client_address):
-    print(f"[NEW CONNECTION] {client_address} connected.")
+async def handle_client(reader, writer):
+    addr = writer.get_extra_info("peername")
+    print(f"[NEW CONNECTION] {addr} connected.")
 
-    buffer = b""
     try:
         while True:
-            data = connection.recv(1024)
-            if not data:
+            line = await reader.readline()
+            if not line:
                 break
 
-            buffer += data
-
-            while b"\n" in buffer:
-                line, buffer = buffer.split(b"\n", 1)
-
+            try:
                 request = shlex.split(line.decode("utf-8"))
-                
-                response = command_parser(request)
+                response = (command_parser(request) + "\n").encode("utf-8")
+            except (ValueError, UnicodeDecodeError):
+                response = b"[ERROR] Invalid command.\n"
+            
 
-                connection.sendall(response.encode("utf-8"))
-
-
-    except ConnectionResetError:
-        print(f"[DISCONNECT] Client {client_address} abruptly disconnected.")
-    except socket.error as e:
-        print(f"[ERROR] Network error with client {client_address}: {e}")
+            writer.write(response)
+            await writer.drain()
     finally:
-        connection.close()
-        print(f"[CLOSE] Connection with {client_address} closed.")
+        print(f"Disconnected: {addr}")
+        writer.close()
+        await writer.wait_closed()
 
 
 
 def command_parser(request):
     if len(request) == 0:
-        return "ERROR Empty request."
-
-    if request[0] == 'PING':
-        return ping_handler()
+        return "[ERROR] Empty request."
 
     match(request[0]):
+        case "PING":
+            return ping_handler()
         case "GET":
             if len(request) != 2:
-                return "ERROR GET need a key."
+                return "[ERROR] GET need a key."
             key = request[1]
             return get_handler(key)
         case "SET":
             if len(request) != 3:
-                return "Invalid [SET] command."
+                return "[ERROR] Invalid SET command."
             key = request[1]
             value = request[2]
             return set_handler(key, value)
         case "DEL":
             if len(request) != 2:
-                return "ERROR DEL need a key."
+                return "[ERROR] DEL need a key."
             key = request[1]
             return del_handler(key)
         case "INCR":
             if len(request) != 2:
-                return "ERROR INCR need a key."
+                return "[ERROR] INCR need a key."
             key = request[1]
             return incr_handler(key)
         case _:
-            return "Invalid request."
+            raise ValueError
 
 def ping_handler():
     return "PONG"
@@ -92,56 +83,25 @@ def del_handler(key):
 
 def incr_handler(key):
     if key not in store:
-        return f"ERROR [{key}] does not exist."
-    with lock:
-        '''
-        try:
-            tmp = int(store[key])
-        except ValueError:
-            print(f"ERROR [{key}] is not an integer.")
-            
-        
-        time.sleep(1)
-        tmp += 1
-        time.sleep(1)
-        
-        store[key] = str(tmp)
-        '''
-        store[key] = str(int(store[key]) + 1)
-        
-        return "OK"
-
-def start_server():
-    server_address = ('localhost', 8000)
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
+        return f"Key [{key}] does not exist."
     try:
-        server_socket.bind(server_address)
-        server_socket.listen()
-        print(f"[STARTING] Server is listening on {server_address}...")
-    except socket.error as e:
-        print(f"[ERROR] Failed to bind/listen: {e}")
-        sys.exit(1)
+        store[key] = str(int(store[key]) + 1) 
+    except ValueError:
+        return f"Key [{key}] is not an integer."       
+    return "OK"
 
+async def main():
     try:
-        while True:
-            connection, client_address = server_socket.accept()
+        server = await asyncio.start_server(handle_client, "127.0.0.1", 8000)
+        addr = server.sockets[0].getsockname()
+        print(f"Serving on {addr}")
+    except OSError as e:
+        print(f"[ERROR] Failed to start server: {e}")
+        return
 
-            client_thread = threading.Thread(
-                target=handle_client,
-                args=(connection, client_address)
-            )
-
-            client_thread.daemon = True
-            client_thread.start()
-
-            print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 1}")
-    except KeyboardInterrupt:
-        print("\n[SHUTDOWN] Server shutting down via Ctrl+C...")
-    finally:
-        server_socket.close()
-        print("Server shut down successfully.")
+    async with server:
+        await server.serve_forever()
 
 
 if __name__ == "__main__":
-    start_server()
+    asyncio.run(main())
